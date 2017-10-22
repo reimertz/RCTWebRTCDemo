@@ -10,6 +10,7 @@ import {
   TextInput,
   ListView,
   Platform,
+  ScrollView
 } from 'react-native';
 
 import io from 'socket.io-client';
@@ -213,7 +214,7 @@ socket.on('connect', function(data) {
   getLocalStream(true, function(stream) {
     localStream = stream;
     container.setState({selfViewSrc: stream.toURL()});
-    container.setState({status: 'ready', info: 'Please enter or create room ID'});
+    container.setState({status: 'ready', info: 'Waiting for others to join...'});
   });
 });
 
@@ -249,9 +250,10 @@ const RCTWebRTCDemo = React.createClass({
     return {
       info: 'Initializing',
       status: 'init',
-      roomID: '',
+      roomID: 'Mavencook-Demo',
       isFront: true,
       selfViewSrc: null,
+      currentView: 'local',
       remoteList: {},
       textRoomConnected: false,
       textRoomData: [],
@@ -260,11 +262,14 @@ const RCTWebRTCDemo = React.createClass({
   },
   componentDidMount: function() {
     container = this;
-  },
-  _press(event) {
-    this.refs.roomID.blur();
+
     this.setState({status: 'connect', info: 'Connecting'});
     join(this.state.roomID);
+  },
+  _press(event) {
+    // this.refs.roomID.blur();
+    // this.setState({status: 'connect', info: 'Connecting'});
+    // join(this.state.roomID);
   },
   _switchVideoType() {
     const isFront = !this.state.isFront;
@@ -279,6 +284,8 @@ const RCTWebRTCDemo = React.createClass({
       }
       localStream = stream;
       container.setState({selfViewSrc: stream.toURL()});
+
+      container.setState({currentView: 'local'})
 
       for (const id in pcPeers) {
         const pc = pcPeers[id];
@@ -323,43 +330,53 @@ const RCTWebRTCDemo = React.createClass({
     );
   },
   render() {
+    const stream = this.state.currentView === 'local' ? this.state.selfViewSrc :
+    this.state.currentView
+
     return (
       <View style={styles.container}>
-        <Text style={styles.welcome}>
-          {this.state.info}
-        </Text>
-        {this.state.textRoomConnected && this._renderTextRoom()}
-        <View style={{flexDirection: 'row'}}>
-          <Text>
-            {this.state.isFront ? "Use front camera" : "Use back camera"}
-          </Text>
+      <RTCView streamURL={stream} style={styles.selfView}/>
+      <ScrollView
+          contentContainerStyle={{
+            flex: 0,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'flex-end',
+            backgroundColor: 'transparent',
+          }}
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}>
           <TouchableHighlight
-            style={{borderWidth: 1, borderColor: 'black'}}
-            onPress={this._switchVideoType}>
-            <Text>Switch camera</Text>
-          </TouchableHighlight>
-        </View>
-        { this.state.status == 'ready' ?
-          (<View>
-            <TextInput
-              ref='roomID'
-              autoCorrect={false}
-              style={{width: 200, height: 40, borderColor: 'gray', borderWidth: 1}}
-              onChangeText={(text) => this.setState({roomID: text})}
-              value={this.state.roomID}
+            style={{width: 200}}
+            onPress={() => this.setState({currentView: 'local'})}>
+            <RTCView
+              streamURL={this.state.selfViewSrc}
+              style={[styles.remoteView, {
+                borderWidth: this.state.currentView === 'local' ? 5 : 0,
+              }]}
+              onPress={() => this.setState({currentView: 'local'})}
             />
-            <TouchableHighlight
-              onPress={this._press}>
-              <Text>Enter room</Text>
             </TouchableHighlight>
-          </View>) : null
-        }
-        <RTCView streamURL={this.state.selfViewSrc} style={styles.selfView}/>
-        {
-          mapHash(this.state.remoteList, function(remote, index) {
-            return <RTCView key={index} streamURL={remote} style={styles.remoteView}/>
+          {
+          mapHash(this.state.remoteList, (remote, index) => {
+            return(
+              <TouchableHighlight
+                key={index}
+                style={styles.remoteView}
+                onPress={() => this.setState({currentView: remote})}>
+                <RTCView streamURL={remote}
+                style={[styles.remoteView, {
+                  borderWidth: this.state.currentView === remote ? 5 : 0,
+                }]}
+                />
+              </TouchableHighlight>
+              )
           })
         }
+      </ScrollView>
+        <Text style={styles.welcome}>
+          {Object.keys(this.state.remoteList).length + 1} connected
+        </Text>
       </View>
     );
   }
@@ -367,22 +384,31 @@ const RCTWebRTCDemo = React.createClass({
 
 const styles = StyleSheet.create({
   selfView: {
-    width: 200,
-    height: 150,
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    top: 0,
+    left: 0
   },
   remoteView: {
     width: 200,
     height: 150,
+    marginRight: 20,
+    borderWidth: 0,
+    borderColor: 'orange'
   },
   container: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#F5FCFF',
   },
   welcome: {
     fontSize: 20,
     textAlign: 'center',
     margin: 10,
+    width: '100%'
+
   },
   listViewContainer: {
     height: 150,
